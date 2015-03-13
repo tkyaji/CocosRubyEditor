@@ -26,15 +26,11 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
 
 
     def on_activated(self, view):
-        print("on_activated")
-
         if self.setting == None:
             self.setting = sublime.load_settings("CocosRubyEditor.sublime-settings")
 
 
     def on_activated_async(self, view):
-        print("on_activated_async")
-
         if self.keywords == None:
             self.keywords = self.setting.get("keywords")
             if self.keywords == None:
