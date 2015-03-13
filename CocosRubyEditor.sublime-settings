@@ -1,0 +1,4 @@
+{
+    "parse_interval": 200,
+    "file_exts": [".rb"]
+}
