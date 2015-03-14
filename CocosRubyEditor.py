@@ -183,7 +183,7 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
             if start_position < 0:
                 start_position = 0
                 break
-            if re.match("\\s", view.substr(start_position)):
+            if re.match(r"[\s\(;]", view.substr(start_position)):
                 start_position += 1
                 break
             start_position -= 1
@@ -550,21 +550,27 @@ class Block:
 
 
     @classmethod
-    def __get_class_name_by_func_name(cls, func_name, block, keywords, include_modules=None):
+    def __get_class_name_by_func_name(cls, func_name, block, keywords, include_modules=None, func_type='sfunctions'):
         word_list = func_name.split(".")
         if len(word_list) < 2:
             return None
 
         if word_list[0] in keywords['classes']:
-            class_info = keywords['classes'][word_list[0]]
-            sfunctions = class_info['sfunctions']
-            for fname, fvalue in sfunctions.items():
-                pos = fname.find("(")
-                if pos >= 0:
-                    fname = fname[:pos]
+            class_name = word_list[0]
+            class_dict = keywords['classes'][class_name]
+            while class_dict:
+                functions = class_dict[func_type]
+                if func_type == 'ifunctions':
+                    print(functions.keys())
+                for fname, fvalue in functions.items():
+                    pos = fname.find("(")
+                    if pos >= 0:
+                        fname = fname[:pos]
 
-                if fname == word_list[1]:
-                    return fvalue['ret_type']
+                    if fname == word_list[1]:
+                        return fvalue['ret_type']
+
+                class_dict = keywords['classes'][class_dict['base_class']] if 'base_class' in class_dict else None
 
         if include_modules:
             for module in include_modules:
@@ -579,7 +585,9 @@ class Block:
             for tmp_block in tmp_blocks:
                 for b in tmp_block.variable_blocks:
                     if b.name == word_list[0]:
-                        class_name = cls.__get_class_name_by_func_name(b.value, block, keywords)
+                        cname = cls.__get_class_name_by_func_name(b.value, block, keywords)
+                        fname = cname + "." + word_list[1]
+                        class_name = cls.__get_class_name_by_func_name(fname, block, keywords, [], 'ifunctions')
                         if class_name:
                             return class_name
 
