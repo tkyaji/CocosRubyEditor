@@ -9,7 +9,7 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
     def __init__(self):
         self.setting = None
         self.keywords = None
-        self.root_block = None
+        self.root_blocks = {}
         self.count = 0
         self.add_text_locations = []
 
@@ -40,19 +40,21 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
         if not self.check(view):
             return
 
-        if not self.root_block:
-            self.root_block = Block.parse_document(view, self.keywords)
+        if not view.file_name() in self.root_blocks:
+            self.root_blocks[view.file_name()] = Block.parse_document(view, self.keywords)
 
 
     def parse_document(self, view, count):
         if count == self.count:
-            self.root_block = Block.parse_document(view, self.keywords)
+            self.root_blocks[view.file_name()] = Block.parse_document(view, self.keywords)
             self.add_text_locations = []
 
 
     def on_modified_async(self, view):
         if not self.check(view):
             return
+
+        print("###" + view.file_name())
 
         interval = self.setting.get("parse_interval", 200)
 
@@ -66,13 +68,15 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
         if not self.check(view):
             return []
 
+        root_block = self.root_blocks[view.file_name()]
+
         prefix_word = self.__get_block_tokens(view, locations)
         if prefix_word.endswith(":::") or prefix_word[-2:] in ("..", ".:", ":."):
             return []
         if prefix_word[-1] == ":" and prefix_word[-2] != ":":
             return []
 
-        include_modules = self.__get_include_modules(locations)
+        include_modules = self.__get_include_modules(root_block, locations)
         keyword_dict = self.__get_check_keyword_dict(include_modules)
         token_list = prefix_word.split("::")
         token_list = token_list[:-1] + token_list[-1].split(".") if "." in token_list[-1] else token_list
@@ -87,7 +91,7 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
                         class_name = keyword_dict
                         break
         else:
-            class_name = Block.get_variable_class(token_list[0], self.root_block, locations[0], self.add_text_locations, self.keywords, include_modules)
+            class_name = Block.get_variable_class(token_list[0], root_block, locations[0], self.add_text_locations, self.keywords, include_modules)
             if class_name:
                 func_type = "ifunctions"
 
@@ -137,11 +141,11 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
         return keyword_dict
 
 
-    def __get_include_modules(self, locations):
+    def __get_include_modules(self, root_block, locations):
         include_modules = []
         self.add_text_locations.append(locations[0])
-        if self.root_block:
-            include_modules = Block.get_include_modules(self.root_block, locations[0], self.add_text_locations)
+        if root_block:
+            include_modules = Block.get_include_modules(root_block, locations[0], self.add_text_locations)
         return include_modules
 
 
