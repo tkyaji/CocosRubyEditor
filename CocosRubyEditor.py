@@ -249,7 +249,7 @@ class Block:
         add_len = len(add_text_locations)
         if add_len >= 2:
             diff = add_text_locations[-1] - add_text_locations[0]
-            add_len = diff if diff > add_len else add_len
+            add_len = max(add_len, diff)
         return position >= self.begin and position <= self.end + add_len
 
     @property
@@ -518,7 +518,7 @@ class Block:
         if find_block == None:
             return None
 
-        return cls.__get_class_name_by_func_name(find_block.value, keywords, include_modules)
+        return cls.__get_class_name_by_func_name(find_block.value, block, keywords, include_modules)
 
 
     @classmethod
@@ -539,17 +539,18 @@ class Block:
                     break
 
         while find_block:
-            class_name = cls.__get_class_name_by_func_name(find_block.value, keywords, include_modules)
+            class_name = cls.__get_class_name_by_func_name(find_block.value, block, keywords, include_modules)
             if class_name in keywords['classes']:
                 break
 
             find_block = cls.__find_variable_block(find_block.value, block, position, add_text_locations, keywords, include_modules)
 
+
         return find_block
 
 
     @classmethod
-    def __get_class_name_by_func_name(cls, func_name, keywords, include_modules=None):
+    def __get_class_name_by_func_name(cls, func_name, block, keywords, include_modules=None):
         word_list = func_name.split(".")
         if len(word_list) < 2:
             return None
@@ -568,9 +569,21 @@ class Block:
         if include_modules:
             for module in include_modules:
                 append_name = module + "::" + func_name
-                class_name = cls.__get_class_name_by_func_name(append_name, keywords)
+                class_name = cls.__get_class_name_by_func_name(append_name, block, keywords)
                 if class_name:
                     return class_name
+
+        tmp_blocks = [block]
+
+        while len(tmp_blocks) > 0:
+            for tmp_block in tmp_blocks:
+                for b in tmp_block.variable_blocks:
+                    if b.name == word_list[0]:
+                        class_name = cls.__get_class_name_by_func_name(b.value, block, keywords)
+                        if class_name:
+                            return class_name
+
+            tmp_blocks = tmp_block.inner_blocks
 
         return None
 
