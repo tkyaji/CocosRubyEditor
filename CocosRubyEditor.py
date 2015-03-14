@@ -1,5 +1,5 @@
 import sublime, sublime_plugin
-import os, sys, time, re
+import os, sys, time, re, copy
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "keywords"))
 import ruby_keyword
@@ -10,8 +10,8 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
         self.setting = None
         self.keywords = None
         self.root_blocks = {}
-        self.count = 0
-        self.add_text_locations = []
+        self.counts = {}
+        self.add_text_locations = {}
 
 
     def check(self, view):
@@ -29,9 +29,15 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
         if self.setting == None:
             self.setting = sublime.load_settings("CocosRubyEditor.sublime-settings")
 
+        if not view.file_name() in self.counts:
+            self.counts[view.file_name()] = 0
+
+        if not view.file_name() in self.add_text_locations:
+            self.add_text_locations[view.file_name()] = []
+
 
     def on_activated_async(self, view):
-        if self.keywords == None:
+        if True or self.keywords == None:
             self.keywords = self.setting.get("keywords")
             if self.keywords == None:
                 self.keywords = ruby_keyword.get_keywords()
@@ -45,23 +51,21 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
 
 
     def parse_document(self, view, count):
-        if count == self.count:
+        if count == self.counts[view.file_name()]:
             self.root_blocks[view.file_name()] = Block.parse_document(view, self.keywords)
-            self.add_text_locations = []
+            self.add_text_locations[view.file_name()] = []
 
 
     def on_modified_async(self, view):
         if not self.check(view):
             return
 
-        print("###" + view.file_name())
-
         interval = self.setting.get("parse_interval", 200)
 
-        count = self.count
+        count = self.counts[view.file_name()]
         count += 1
         sublime.set_timeout_async(lambda: self.parse_document(view, count), interval)
-        self.count = count
+        self.counts[view.file_name()] = count
 
 
     def on_query_completions(self, view, prefix, locations):
@@ -76,7 +80,7 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
         if prefix_word[-1] == ":" and prefix_word[-2] != ":":
             return []
 
-        include_modules = self.__get_include_modules(root_block, locations)
+        include_modules = self.__get_include_modules(view, root_block, locations)
         keyword_dict = self.__get_check_keyword_dict(include_modules)
         token_list = prefix_word.split("::")
         token_list = token_list[:-1] + token_list[-1].split(".") if "." in token_list[-1] else token_list
@@ -91,7 +95,8 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
                         class_name = keyword_dict
                         break
         else:
-            class_name = Block.get_variable_class(token_list[0], root_block, locations[0], self.add_text_locations, self.keywords, include_modules)
+            add_text_locations = self.add_text_locations[view.file_name()]
+            class_name = Block.get_variable_class(token_list[0], root_block, locations[0], add_text_locations, self.keywords, include_modules)
             if class_name:
                 func_type = "ifunctions"
 
@@ -127,7 +132,7 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
 
     def __get_check_keyword_dict(self, include_modules):
 
-        keyword_dict = self.keywords['tree']
+        keyword_dict = copy.deepcopy(self.keywords['tree'])
 
         for module in include_modules:
             tmp_kdict = keyword_dict
@@ -141,11 +146,16 @@ class CocosRubyEditorCommand(sublime_plugin.EventListener):
         return keyword_dict
 
 
-    def __get_include_modules(self, root_block, locations):
+    def __get_include_modules(self, view, root_block, locations):
         include_modules = []
-        self.add_text_locations.append(locations[0])
+        add_text_locations = self.add_text_locations[view.file_name()]
+        add_text_locations.append(locations[0])
+
         if root_block:
-            include_modules = Block.get_include_modules(root_block, locations[0], self.add_text_locations)
+            include_modules = Block.get_include_modules(root_block, locations[0] - 1, add_text_locations)
+
+        self.add_text_locations[view.file_name()] = add_text_locations
+
         return include_modules
 
 
